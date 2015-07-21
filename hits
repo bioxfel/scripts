@@ -1,0 +1,87 @@
+#!/usr/bin/env python
+
+import argparse
+import sys, os
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-i", type=str, nargs=1, help="Cheetah GUI crawler.txt file path (optional, will use $H5DIR environment variable to find it otherwise)")
+parser.add_argument("-r", action="append", type=int, nargs='+', help="run numbers (optional, space delimited list)")
+parser.add_argument("-t", type=str, help="tag (optional)")
+args = parser.parse_args()
+
+events = []
+
+print "Run     Events   Hits     Hitrate (%)"
+
+if args.i is None:
+	h5dir = os.getenv('H5DIR')
+	if h5dir is None:
+		crawler = raw_input("Enter crawler.txt file path: ")
+	else:
+		crawler = h5dir + '/../gui/crawler.txt'
+else:
+	crawler = args.i[0]
+
+if args.r is not None:
+	runs = args.r[0]
+	n=0
+	m=0
+	with open(crawler) as f:
+		for line in f:
+			if n>0:
+				columns = line.split(',')
+				if int(columns[0]) in runs:
+					events.append([float(columns[6].replace(" ","").replace("-","0")),float(columns[7].replace(" ","").replace("-","0"))])
+					if events[m][0] > 0:
+						print "r" + columns[0].replace(" ","").replace("-","0").zfill(4) + "  ", repr(int(events[m][0])).ljust(8), repr(int(events[m][1])).ljust(8), repr(round(events[m][1]/events[m][0]*100,3)).ljust(4)
+					else:
+						print "r" + columns[0].replace(" ","").replace("-","0").zfill(4) + "  ", repr(int(events[m][0])).ljust(8), repr(int(events[m][1])).ljust(8), repr(round(0.,3)).ljust(4)
+					m+=1
+			n+=1
+elif args.t is not None:
+	tag = args.t
+	n=0
+	m=0
+	with open(crawler) as f:
+		for line in f:
+			if n>0:
+				columns = line.split(',')
+				if tag == columns[5][6:]:
+					events.append([float(columns[6].replace(" ","").replace("-","0")),float(columns[7].replace(" ","").replace("-","0"))])
+					if events[m][0] > 0:
+						print "r" + columns[0].replace(" ","").replace("-","0").zfill(4) + "  ", repr(int(events[m][0])).ljust(8), repr(int(events[m][1])).ljust(8), repr(round(events[m][1]/events[m][0]*100,3)).ljust(4)
+					else:
+						print "r" + columns[0].replace(" ","").replace("-","0").zfill(4) + "  ", repr(int(events[m][0])).ljust(8), repr(int(events[m][1])).ljust(8), repr(round(0.,3)).ljust(4)
+					m+=1
+			n+=1
+else:
+	n=0
+	m=0
+	with open(crawler) as f:
+		for line in f:
+			if n > 0:
+				columns = line.split(',')
+				events.append([float(columns[6].replace(" ","").replace("-","0")),float(columns[7].replace(" ","").replace("-","0"))])
+				if events[m][0] > 0:
+					print "r" + columns[0].replace(" ","").replace("-","0").zfill(4) + "  ", repr(int(events[m][0])).ljust(8), repr(int(events[m][1])).ljust(8), repr(round(events[m][1]/events[m][0]*100,3)).ljust(4)
+				else:
+					print "r" + columns[0].replace(" ","").replace("-","0").zfill(4) + "  ", repr(int(events[m][0])).ljust(8), repr(int(events[m][1])).ljust(8), repr(round(0.,3)).ljust(4)
+				m+=1
+			n+=1
+
+images=0
+hits=0
+
+for i in range(len(events)):
+	events[i][0] = float(events[i][0])
+	events[i][1] = float(events[i][1])
+	images += events[i][0]
+	hits += events[i][1]
+
+if images == 0:
+	hitrate = 0
+else:
+	hitrate = hits/images*100
+
+print "-------------------------------------"
+print "Total  ", repr(int(images)).ljust(8), repr(int(hits)).ljust(8), repr(round(hitrate,3)).ljust(4)

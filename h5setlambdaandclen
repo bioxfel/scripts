@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+
+import argparse
+import h5py
+import sys
+import numpy as np
+# import matplotlib.pyplot as plt
+
+def readh5(filename):
+	f = h5py.File(filename, "r")
+	data = f["data"]
+	tim = data["data"]
+	tim = np.array(tim)
+	im = tim.copy()
+	f.close()
+	return im
+
+#def writeh5(filename,mydat,energy,clen,wavelength):
+def writeh5(filename,mydat,clen,wavelength):
+	f = h5py.File(filename,"w")
+	data = f.create_group("data");
+	data.create_dataset("data",data=mydat);
+	LCLS = f.create_group("LCLS");
+#	LCLS.create_dataset("photon_energy_eV",(1,), data=energy);
+	LCLS.create_dataset("photon_wavelength_A",(1,), data=wavelength);
+	LCLS.create_dataset("detector0-EncoderValue",(1,),data=clen);
+	f.close()
+	return
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-i", action="store", dest="h5FileNames", type=str, nargs=1, help="intput file")
+#parser.add_argument("-e", action="store", dest="energyev", type=int, nargs=1,  help="energy (eV)")
+parser.add_argument("-d", action="store", dest="distancemm", type=float, nargs=1, help="detector distance (mm)")
+parser.add_argument("-l", action="store", dest="wavelengthA", type=float, nargs=1, help="wavelength (A)")
+parser.add_argument("-o", action="store", dest="h5SavePath", type=str, nargs=1, help="output file")
+args = parser.parse_args()
+
+h5FileName = args.h5FileNames[0]
+#energy = args.energyev[0]
+clen = args.distancemm[0]
+wavelength = args.wavelengthA[0]
+h5SavePath = args.h5SavePath[0]
+
+powder = readh5(h5FileName)
+
+# im = readh5(h5FileNames[0])
+# powderlabeled = im
+	
+#writeh5(h5SavePath,powder,energy,clen,wavelength)
+writeh5(h5SavePath,powder,clen,wavelength)
+

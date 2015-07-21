@@ -1,0 +1,138 @@
+#!/bin/bash
+
+stream=""
+sym=""
+pdb=""
+lowres=""
+highres=""
+nshells=""
+
+while getopts ':hi:y:p:l:u:n:c' OPTION ; do
+  case $OPTION in
+    h)
+	
+cat <<EOF
+Calculate indexing statistics from CrystFEL stream file.
+Will also create .hkl files if they don't already exist.
+
+Usage: stream2stats <[options]>
+
+Options:
+
+	-h	Print this help
+	-i	Input stream file (required)
+	-y	Symmetry (required)
+	-p	Unit cell file (.pdb, required)
+	-l	Low resolution cutoff in (d in A).
+	-u	High (Upper) resolution cutoff in (d in A).
+	-n	Use <n> resolution shells.
+	-c	Force calculation of hkl from stream (default: only if hkl doesn't exist)
+
+EOF
+	exit 1
+	;;
+    i)
+	stream=$OPTARG
+	;;
+    y)
+	sym=$OPTARG
+	;;
+    p)
+	pdb=$OPTARG
+	;;
+    l)
+	lowres=$OPTARG
+	;;
+    u)
+	highres=$OPTARG
+	;;
+    n)
+	nshells=$OPTARG
+	;;
+    c)
+	calchkl="yes"
+	;;
+    ?)
+	echo "Invalid Options"
+  esac
+done
+
+basename=${stream%.*}
+
+echo $basename
+
+extraopts=""
+
+if [ "$lowres" != "" ];
+then
+	extraopts=${extraopts}" --lowres="${lowres}
+fi
+if [ "$highres" != "" ];
+then
+	extraopts=${extraopts}" --highres="${highres}
+fi
+if [ "$nshells" != "" ];
+then
+	extraopts=${extraopts}" --nshells="${nshells}
+fi
+
+echo "extra options are: " ${extraopts}
+
+if [ ! -f "${basename}_A.hkl" ] || [ "${calchkl}" == "yes" ];
+then
+	alternate-stream ${basename}.stream ${basename}_A.stream ${basename}_B.stream
+	process_hkl -i ${basename}.stream -o ${basename}.hkl -y ${sym}
+	process_hkl -i ${basename}_A.stream -o ${basename}_A.hkl -y ${sym}
+	process_hkl -i ${basename}_B.stream -o ${basename}_B.hkl -y ${sym}
+fi
+
+check_hkl ${basename}.hkl -y ${sym} -p ${pdb} --shell-file=${basename}-shells.dat ${extraopts}
+compare_hkl ${basename}_[AB].hkl -y ${sym} -p ${pdb} --shell-file=${basename}-rsplit.dat --fom=rsplit ${extraopts}
+compare_hkl ${basename}_[AB].hkl -y ${sym} -p ${pdb} --shell-file=${basename}-cchalf.dat --fom=cc ${extraopts}
+compare_hkl ${basename}_[AB].hkl -y ${sym} -p ${pdb} --shell-file=${basename}-ccstar.dat --fom=ccstar ${extraopts}
+
+echo "#!/reg/g/cctbx/build/bin/python
+
+import os, argparse
+import numpy as np
+import matplotlib.pyplot as plt
+
+parser = argparse.ArgumentParser(description=\"Create indexing stats figure\")
+parser.add_argument(\"-s\", metavar=\"FILE\", help=\"overall stats file\")
+parser.add_argument(\"-r\", metavar=\"FILE\", help=\"rsplit file\")
+parser.add_argument(\"-c\", metavar=\"FILE\", help=\"cchalf file\")
+parser.add_argument(\"-x\", metavar=\"FILE\", help=\"ccstar file\")
+args = parser.parse_args()
+
+completeness = np.nan_to_num(np.loadtxt(args.s, usecols=(9,3),skiprows=1))
+rsplit = np.nan_to_num(np.loadtxt(args.r, usecols=(3,1),skiprows=1))
+cchalf = np.nan_to_num(np.loadtxt(args.c, usecols=(3,1),skiprows=1))
+ccstar = np.nan_to_num(np.loadtxt(args.x, usecols=(3,1),skiprows=1))
+
+lowres = completeness[0,0]
+highres = completeness[-1,0]
+
+plt.plot(completeness[:,0],completeness[:,1]/100,label=\"Completeness\")
+plt.plot(rsplit[:,0],rsplit[:,1]/100,label=\"Rsplit\")
+plt.plot(cchalf[:,0],cchalf[:,1],label=\"CC 1/2\")
+plt.plot(ccstar[:,0],ccstar[:,1],label=\"CC*\")
+plt.plot(completeness[:,0],completeness[:,0]*0.+0.5,label=\"0.5\")
+
+plt.title(\"${basename}\")
+plt.xlabel(\"Resolution (A)\")
+leg = plt.legend(prop={\"size\":10},labelspacing=0.8,fancybox=True)
+leg.get_frame().set_alpha(0.5)
+plt.gca().invert_xaxis()
+plt.xlim([lowres,highres*.9])
+plt.ylim([0,1.1])
+plt.semilogx()
+xticks = np.arange(2*int(lowres),int(highres),-1)*.5
+plt.xticks(xticks,xticks.astype(str))
+plt.savefig(\"${basename}_stats.png\")
+print \"${basename}_stats.png\" " > stats.py
+
+python stats.py -s ${basename}-shells.dat -r ${basename}-rsplit.dat -c ${basename}-cchalf.dat -x ${basename}-ccstar.dat
+
+
+
+
